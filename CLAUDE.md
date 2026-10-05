@@ -95,6 +95,22 @@ Base de datos:
 
 ---
 
+# 📝 Memoria de sesiones (`memory.md`)
+
+- Al **iniciar** una sesión, leer `memory.md` para retomar el contexto.
+- Al **terminar** cada feature, cambio relevante o sesión de trabajo, **sobrescribir** `memory.md`
+  con el estado actualizado, manteniendo sus secciones:
+  - Última actualización (fecha) y último commit
+  - Estado actual (stack, puertos, modelo de datos, funcionalidades, tests)
+  - Última sesión: qué se agregó/cambió/corrigió
+  - Decisiones y reglas a recordar
+  - Pendientes / conocidos
+  - Próximos pasos sugeridos
+- Reescribir el archivo completo (no acumular un historial infinito); el historial vive en `git log`.
+- Incluir `memory.md` en el mismo commit que el cambio que describe.
+
+---
+
 # ✅ Token Efficient Rules
 
 1. Think before acting. Read existing files before writing code.
