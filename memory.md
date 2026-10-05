@@ -4,7 +4,10 @@
 > Refleja el estado actual y las últimas novedades. El historial completo está en `git log`.
 
 **Última actualización:** 2026-10-05
-**Último commit:** `8173b2a` chore: licencia propietaria (rama `main`, sincronizada con `origin/main`)
+**Último commit:** `ef6a9f2` docs: memoria de sesiones (rama `main`, sincronizada con `origin/main`)
+
+> **▶️ Retomar aquí:** definir el **modelo de productos para el POS** (ver "Próximos pasos").
+> El usuario lo aprobó como siguiente tarea; todavía no se diseñó ni se escribió nada.
 
 ---
 
@@ -69,6 +72,7 @@ Login demo: `demo@example.com` / `demo12345`
 - Repo creado en GitHub (privado) y publicado en `main`.
 - Licencia propietaria agregada; auditoría de dependencias: todas permisivas (MIT/Apache/ISC/BSD).
 - Se creó este `memory.md` y la regla en `CLAUDE.md` para mantenerlo actualizado en cada sesión.
+- Cierre de sesión: el usuario quiere empezar por el modelo de productos del POS en la próxima sesión.
 
 ---
 
@@ -86,8 +90,14 @@ Login demo: `demo@example.com` / `demo12345`
 - En **stock-control-vue**: el `.env` está commiteado en un repo público (rotar `SESSION_SECRET` y la
   contraseña de la DB) y los íconos usan `i-lucide-*` (no renderizan).
 
-## 🚀 Próximos pasos sugeridos
+## 🚀 Próximos pasos
 
-- Definir el dominio de tienda/POS: productos con precio de venta y SKU/código de barras,
-  stock por sucursal, movimientos de stock, ventas (carrito, medios de pago, comprobante).
-- Decidir si `locations` evoluciona a sucursales/depósitos o se agrega un modelo `branches`.
+1. **[SIGUIENTE] Modelo de productos para el POS.** Preguntas a resolver con el usuario antes de diseñar:
+   - Relación con `items`: ¿los productos reemplazan a items, conviven, o items pasa a ser el producto?
+   - Identificación: SKU interno, código de barras (EAN), ¿variantes (talle/color/sabor)?
+   - Precios: costo, precio de venta, ¿listas de precios (minorista/mayorista)?, moneda, IVA.
+   - Unidades: por unidad, por peso/fracción, packs (stock-control-vue usa `unidades_x_pack`).
+   - Categorías: ¿reutilizar `labels` o un modelo `categories` propio?
+   - Stock: ¿por sucursal/depósito? (decide si `locations` evoluciona a sucursales o se agrega `branches`).
+2. Movimientos de stock (ingresos, ajustes, transferencias) — referencia: `stock_movements` de stock-control-vue.
+3. Ventas / POS: carrito, medios de pago, comprobante.
