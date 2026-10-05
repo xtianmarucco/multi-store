@@ -1,0 +1,87 @@
+// Modelo base de multi-store. Todo dato de negocio pertenece a un grupo:
+// los repositories siempre filtran por el group_id del usuario en sesión.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model groups {
+  id         Int         @id @default(autoincrement())
+  name       String
+  created_at DateTime    @default(now()) @db.Timestamp(6)
+  users      users[]
+  locations  locations[]
+  labels     labels[]
+  items      items[]
+}
+
+model users {
+  id            Int      @id @default(autoincrement())
+  full_name     String
+  email         String   @unique
+  password_hash String
+  role          String   @default("member") // admin | member
+  group_id      Int
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  group         groups   @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id])
+}
+
+// Ubicaciones jerárquicas: Casa > Garaje > Estantería 2.
+model locations {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String?
+  parent_id   Int?
+  group_id    Int
+  created_at  DateTime    @default(now()) @db.Timestamp(6)
+  group       groups      @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  parent      locations?  @relation("location_tree", fields: [parent_id], references: [id], onDelete: SetNull)
+  children    locations[] @relation("location_tree")
+  items       items[]
+
+  @@index([group_id])
+  @@index([parent_id])
+}
+
+model labels {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  color       String?
+  group_id    Int
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  group       groups   @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  items       items[]
+
+  @@unique([group_id, name])
+}
+
+model items {
+  id               Int        @id @default(autoincrement())
+  name             String
+  description      String?
+  quantity         Int        @default(1)
+  manufacturer     String?
+  model_number     String?
+  serial_number    String?
+  purchase_price   Decimal?   @db.Decimal(12, 2)
+  purchase_date    DateTime?  @db.Date
+  warranty_expires DateTime?  @db.Date
+  notes            String?
+  is_archived      Boolean    @default(false)
+  location_id      Int?
+  group_id         Int
+  created_at       DateTime   @default(now()) @db.Timestamp(6)
+  updated_at       DateTime   @default(now()) @updatedAt @db.Timestamp(6)
+  group            groups     @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  location         locations? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+  labels           labels[]
+
+  @@index([group_id, is_archived])
+  @@index([location_id])
+}
