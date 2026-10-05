@@ -3,8 +3,11 @@
 Multi Store: sistema de inventario multiusuario. Cada grupo (hogar, negocio, equipo)
 registra sus cosas, dónde están guardadas y cuánto valen.
 
-Inspirado funcionalmente en HomeBox (https://github.com/hay-kot/homebox), escrito desde cero
-(no contiene código de HomeBox).
+Inspirado funcionalmente en HomeBox (https://github.com/hay-kot/homebox), escrito desde cero:
+no contiene código de HomeBox ni deriva de él. HomeBox es AGPL-3.0, así que NUNCA copiar
+código suyo (ni fragmentos); usarlo solo como referencia funcional.
+
+Licencia: propietaria (ver `LICENSE`).
 
 Objetivos principales:
 - Registrar items con datos de compra, garantía y notas

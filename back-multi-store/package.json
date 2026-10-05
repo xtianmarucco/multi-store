@@ -2,6 +2,7 @@
   "name": "back-multi-store",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "API de multi-store: Express + Prisma + PostgreSQL",
   "main": "src/app.js",
   "scripts": {
