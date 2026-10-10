@@ -1,17 +1,17 @@
-const service = require('../services/locations.service')
+const service = require('../services/products.service')
 const { handleError } = require('../utils/handleError')
 const { parseId } = require('../utils/parse')
 
-const getAllLocations = async (req, res) => {
+const getAllProducts = async (req, res) => {
   try {
-    const data = await service.getAll(req.session.groupId, { type: req.query?.type })
+    const data = await service.getAll(req.session.groupId, req.query)
     res.json({ success: true, data })
   } catch (err) {
     handleError(res, err)
   }
 }
 
-const getLocationById = async (req, res) => {
+const getProductById = async (req, res) => {
   try {
     const data = await service.getById(req.session.groupId, parseId(req.params.id))
     res.json({ success: true, data })
@@ -20,7 +20,7 @@ const getLocationById = async (req, res) => {
   }
 }
 
-const createLocation = async (req, res) => {
+const createProduct = async (req, res) => {
   try {
     const data = await service.create(req.session.groupId, req.body ?? {})
     res.status(201).json({ success: true, data })
@@ -29,7 +29,7 @@ const createLocation = async (req, res) => {
   }
 }
 
-const updateLocation = async (req, res) => {
+const updateProduct = async (req, res) => {
   try {
     const data = await service.update(req.session.groupId, parseId(req.params.id), req.body ?? {})
     res.json({ success: true, data })
@@ -38,7 +38,7 @@ const updateLocation = async (req, res) => {
   }
 }
 
-const deleteLocation = async (req, res) => {
+const deleteProduct = async (req, res) => {
   try {
     await service.remove(req.session.groupId, parseId(req.params.id))
     res.json({ success: true })
@@ -47,4 +47,4 @@ const deleteLocation = async (req, res) => {
   }
 }
 
-module.exports = { getAllLocations, getLocationById, createLocation, updateLocation, deleteLocation }
+module.exports = { getAllProducts, getProductById, createProduct, updateProduct, deleteProduct }
