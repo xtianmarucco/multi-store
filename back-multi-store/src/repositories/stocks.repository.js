@@ -9,25 +9,41 @@ const getStock = (groupId, productId, variantId, locationId) =>
     where: { group_id: groupId, product_id: productId, variant_id: variantId, location_id: locationId }
   })
 
-const findStocks = (groupId, { product_id, location_id } = {}) =>
-  prisma.stocks.findMany({
-    where: {
-      group_id: groupId,
-      ...(product_id && { product_id }),
-      ...(location_id && { location_id })
-    },
-    orderBy: { updated_at: 'desc' }
-  })
+const findStocks = async (groupId, { product_id, location_id } = {}, { page, pageSize }) => {
+  const where = {
+    group_id: groupId,
+    ...(product_id && { product_id }),
+    ...(location_id && { location_id })
+  }
+  const [rows, total] = await prisma.$transaction([
+    prisma.stocks.findMany({
+      where,
+      orderBy: { updated_at: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    }),
+    prisma.stocks.count({ where })
+  ])
+  return { rows, total }
+}
 
-const findMovements = (groupId, { product_id, location_id } = {}) =>
-  prisma.stock_movements.findMany({
-    where: {
-      group_id: groupId,
-      ...(product_id && { product_id }),
-      ...(location_id && { OR: [{ from_location_id: location_id }, { to_location_id: location_id }] })
-    },
-    orderBy: { created_at: 'desc' }
-  })
+const findMovements = async (groupId, { product_id, location_id } = {}, { page, pageSize }) => {
+  const where = {
+    group_id: groupId,
+    ...(product_id && { product_id }),
+    ...(location_id && { OR: [{ from_location_id: location_id }, { to_location_id: location_id }] })
+  }
+  const [rows, total] = await prisma.$transaction([
+    prisma.stock_movements.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    }),
+    prisma.stock_movements.count({ where })
+  ])
+  return { rows, total }
+}
 
 // Helper para el invariante de granularidad del servicio:
 // cuenta variantes del producto en el grupo.
@@ -58,11 +74,20 @@ const setStock = ({ group_id, product_id, variant_id, location_id, quantity, use
   })
 
 // Suma (delta positivo o negativo) + fila de movimiento, en una transacción.
+// Revalida stock suficiente dentro de la transacción (carrera check-then-act):
+// el pre-chequeo del servicio puede quedar obsoleto ante outs concurrentes.
 const addStock = ({ group_id, product_id, variant_id, location_id, quantity, user_id, type, note }) =>
   prisma.$transaction(async (tx) => {
     const existing = await tx.stocks.findFirst({
       where: { group_id, product_id, variant_id, location_id }
     })
+    const available = existing?.quantity ?? 0
+    if (available + quantity < 0) {
+      const err = new Error('Stock insuficiente en la ubicación')
+      err.code = 'VALIDATION_ERROR'
+      err.status = 400
+      throw err
+    }
     const stock = existing
       ? await tx.stocks.update({ where: { id: existing.id }, data: { quantity: existing.quantity + quantity } })
       : await tx.stocks.create({ data: { group_id, product_id, variant_id, location_id, quantity } })

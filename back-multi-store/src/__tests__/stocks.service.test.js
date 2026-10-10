@@ -2,6 +2,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
+const prisma = require('../lib/prisma')
 const repo = require('../repositories/stocks.repository')
 const productsRepo = require('../repositories/products.repository')
 const variantsRepo = require('../repositories/variants.repository')
@@ -32,8 +33,8 @@ beforeEach(() => {
       ? { id, name: `Loc ${id}` }
       : null)
   vi.spyOn(repo, 'getStock').mockResolvedValue(null)
-  vi.spyOn(repo, 'findStocks').mockResolvedValue([])
-  vi.spyOn(repo, 'findMovements').mockResolvedValue([])
+  vi.spyOn(repo, 'findStocks').mockResolvedValue({ rows: [], total: 0 })
+  vi.spyOn(repo, 'findMovements').mockResolvedValue({ rows: [], total: 0 })
   vi.spyOn(repo, 'setStock').mockImplementation(async (data) => ({ ...data }))
   vi.spyOn(repo, 'addStock').mockImplementation(async (data) => ({ ...data }))
   vi.spyOn(repo, 'transfer').mockImplementation(async (data) => ({ ...data }))
@@ -156,13 +157,98 @@ describe('vistas', () => {
     expect(row).toEqual({ quantity: 6 })
   })
 
-  it('list filtra por grupo', async () => {
-    await list(GROUP_ID, { product_id: PRODUCT_ID })
-    expect(repo.findStocks).toHaveBeenCalledWith(GROUP_ID, expect.objectContaining({ product_id: PRODUCT_ID }))
+  it('list pagina por defecto y devuelve {stocks, total, page, pageSize}', async () => {
+    repo.findStocks.mockResolvedValueOnce({ rows: [{ id: 1 }], total: 1 })
+    const result = await list(GROUP_ID, { product_id: PRODUCT_ID })
+    expect(repo.findStocks).toHaveBeenCalledWith(
+      GROUP_ID,
+      expect.objectContaining({ product_id: PRODUCT_ID }),
+      { page: 1, pageSize: 20 }
+    )
+    expect(result).toEqual({ stocks: [{ id: 1 }], total: 1, page: 1, pageSize: 20 })
   })
 
-  it('listMovements filtra por grupo', async () => {
-    await listMovements(GROUP_ID, { location_id: FROM_ID })
-    expect(repo.findMovements).toHaveBeenCalledWith(GROUP_ID, expect.objectContaining({ location_id: FROM_ID }))
+  it('list limita pageSize a 100', async () => {
+    await list(GROUP_ID, { page: '2', pageSize: '500' })
+    expect(repo.findStocks).toHaveBeenCalledWith(GROUP_ID, expect.anything(), { page: 2, pageSize: 100 })
+  })
+
+  it('list rechaza page inválido con VALIDATION_ERROR 400', async () => {
+    await expect(list(GROUP_ID, { page: '0' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
+    expect(repo.findStocks).not.toHaveBeenCalled()
+  })
+
+  it('listMovements pagina por defecto y devuelve {movements, total, page, pageSize}', async () => {
+    repo.findMovements.mockResolvedValueOnce({ rows: [{ id: 2 }], total: 1 })
+    const result = await listMovements(GROUP_ID, { location_id: FROM_ID })
+    expect(repo.findMovements).toHaveBeenCalledWith(
+      GROUP_ID,
+      expect.objectContaining({ location_id: FROM_ID }),
+      { page: 1, pageSize: 20 }
+    )
+    expect(result).toEqual({ movements: [{ id: 2 }], total: 1, page: 1, pageSize: 20 })
+  })
+
+  it('listMovements limita pageSize a 100', async () => {
+    await listMovements(GROUP_ID, { page: '3', pageSize: '1000' })
+    expect(repo.findMovements).toHaveBeenCalledWith(GROUP_ID, expect.anything(), { page: 3, pageSize: 100 })
+  })
+})
+
+describe('parseQuantity estricto (sin coerción)', () => {
+  it.each([true, false, null, ''])('adjust rechaza quantity=%j con VALIDATION_ERROR 400', async (quantity) => {
+    await expect(adjust(GROUP_ID, USER_ID, {
+      product_id: PRODUCT_ID, location_id: FROM_ID, quantity
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
+    expect(repo.setStock).not.toHaveBeenCalled()
+  })
+
+  it('adjust rechaza quantity null sin resetear stock a 0', async () => {
+    await expect(adjust(GROUP_ID, USER_ID, {
+      product_id: PRODUCT_ID, location_id: FROM_ID, quantity: null
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
+    expect(repo.setStock).not.toHaveBeenCalled()
+  })
+
+  it('adjust acepta strings numéricos', async () => {
+    await adjust(GROUP_ID, USER_ID, {
+      product_id: PRODUCT_ID, location_id: FROM_ID, quantity: '8'
+    })
+    expect(repo.setStock).toHaveBeenCalledWith(expect.objectContaining({ quantity: 8 }))
+  })
+
+  it('registerOut rechaza quantity true con VALIDATION_ERROR 400', async () => {
+    await expect(registerOut(GROUP_ID, USER_ID, {
+      product_id: PRODUCT_ID, location_id: FROM_ID, quantity: true
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
+    expect(repo.addStock).not.toHaveBeenCalled()
+  })
+})
+
+describe('guardia en-transacción contra sobregiro (carrera)', () => {
+  it('addStock revalida dentro de la transacción y lanza VALIDATION_ERROR 400', async () => {
+    repo.addStock.mockRestore()
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (cb) => cb({
+      stocks: {
+        findFirst: async () => ({ id: 1, quantity: 1 }),
+        update: async () => { throw new Error('no debe actualizar con stock insuficiente') },
+        create: async () => { throw new Error('no debe crear con stock insuficiente') }
+      },
+      stock_movements: { create: async () => { throw new Error('no debe registrar movimiento') } }
+    }))
+    await expect(repo.addStock({
+      group_id: GROUP_ID, product_id: PRODUCT_ID, variant_id: null,
+      location_id: FROM_ID, quantity: -5, user_id: USER_ID, type: 'out', note: null
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
+  })
+
+  it('registerOut propaga el VALIDATION_ERROR de la guardia en-transacción', async () => {
+    repo.getStock.mockResolvedValueOnce({ quantity: 10 })
+    repo.addStock.mockRejectedValueOnce(
+      Object.assign(new Error('Stock insuficiente en la ubicación'), { code: 'VALIDATION_ERROR', status: 400 })
+    )
+    await expect(registerOut(GROUP_ID, USER_ID, {
+      product_id: PRODUCT_ID, location_id: FROM_ID, quantity: 5
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 })
   })
 })

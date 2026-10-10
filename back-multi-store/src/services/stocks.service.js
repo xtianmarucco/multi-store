@@ -38,6 +38,17 @@ const assertVariant = async (groupId, productId, variantId) => {
   return variant
 }
 
+const DEFAULT_PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 100
+
+const parsePositiveInt = (value, fallback, field) => {
+  if (value === undefined || value === '') return fallback
+  const number = Number(value)
+  if (!Number.isInteger(number) || number < 1)
+    throw createError(`${field} debe ser un entero positivo`, 'VALIDATION_ERROR', 400)
+  return number
+}
+
 const assertLocation = async (groupId, locationId, field) => {
   const location = await locationsRepo.findById(groupId, locationId)
   if (!location) throw createError(`La ubicación (${field}) no existe`, 'VALIDATION_ERROR', 400)
@@ -45,7 +56,13 @@ const assertLocation = async (groupId, locationId, field) => {
 }
 
 const parseQuantity = (value, { allowZero = false } = {}) => {
-  const quantity = Number(value)
+  // Sin coerción: solo números reales o strings numéricos.
+  // Number(true)===1 y Number(null)/Number('')===0 pasaban la validación
+  // y un adjust con quantity null reseteaba el stock a 0.
+  const quantity =
+    typeof value === 'number' ? value
+    : typeof value === 'string' && value.trim() !== '' ? Number(value)
+    : NaN
   if (!Number.isInteger(quantity) || quantity < (allowZero ? 0 : 1))
     throw createError(
       `quantity debe ser un entero ${allowZero ? 'mayor o igual a 0' : 'positivo'}`,
@@ -70,11 +87,15 @@ const resolveScope = async (groupId, { product_id, variant_id, location_id, from
   return { product, productId, variantId }
 }
 
-const list = (groupId, query = {}) =>
-  repo.findStocks(groupId, {
+const list = async (groupId, query = {}) => {
+  const page = parsePositiveInt(query.page, 1, 'page')
+  const pageSize = Math.min(parsePositiveInt(query.pageSize, DEFAULT_PAGE_SIZE, 'pageSize'), MAX_PAGE_SIZE)
+  const { rows, total } = await repo.findStocks(groupId, {
     product_id: query.product_id === undefined ? undefined : parseId(query.product_id, 'product_id'),
     location_id: query.location_id === undefined ? undefined : parseId(query.location_id, 'location_id')
-  })
+  }, { page, pageSize })
+  return { stocks: rows, total, page, pageSize }
+}
 
 const getStock = async (groupId, { product_id, variant_id, location_id }) => {
   const { productId, variantId } = await resolveScope(groupId, { product_id, variant_id, location_id })
@@ -140,10 +161,14 @@ const registerOut = async (groupId, userId, payload) => {
   })
 }
 
-const listMovements = (groupId, query = {}) =>
-  repo.findMovements(groupId, {
+const listMovements = async (groupId, query = {}) => {
+  const page = parsePositiveInt(query.page, 1, 'page')
+  const pageSize = Math.min(parsePositiveInt(query.pageSize, DEFAULT_PAGE_SIZE, 'pageSize'), MAX_PAGE_SIZE)
+  const { rows, total } = await repo.findMovements(groupId, {
     product_id: query.product_id === undefined ? undefined : parseId(query.product_id, 'product_id'),
     location_id: query.location_id === undefined ? undefined : parseId(query.location_id, 'location_id')
-  })
+  }, { page, pageSize })
+  return { movements: rows, total, page, pageSize }
+}
 
 module.exports = { list, getStock, adjust, transfer, registerIn, registerOut, listMovements }
