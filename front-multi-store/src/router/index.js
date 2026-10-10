@@ -24,6 +24,27 @@ const routes = [
     component: () => import('../views/DashboardView.vue')
   },
   {
+    path: '/products',
+    name: 'ProductsView',
+    component: () => import('../views/ProductsView.vue')
+  },
+  {
+    path: '/products/new',
+    name: 'ProductNew',
+    component: () => import('../views/ProductFormView.vue')
+  },
+  {
+    path: '/products/:id',
+    name: 'ProductEdit',
+    component: () => import('../views/ProductFormView.vue'),
+    props: route => ({ id: Number(route.params.id) })
+  },
+  {
+    path: '/categories',
+    name: 'CategoriesView',
+    component: () => import('../views/CategoriesView.vue')
+  },
+  {
     path: '/items',
     name: 'ItemsView',
     component: () => import('../views/ItemsView.vue')
