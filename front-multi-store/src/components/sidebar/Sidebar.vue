@@ -24,6 +24,8 @@
     <div class="flex flex-1 flex-col overflow-hidden px-3 py-4">
       <nav class="flex flex-col gap-1 overflow-y-auto">
         <SidebarItem icon="layout-dashboard" label="Dashboard" to="/dashboard" @navigate="emit('close')" />
+        <SidebarItem icon="package" label="Productos" to="/products" :active="route.path.startsWith('/products')" @navigate="emit('close')" />
+        <SidebarItem icon="tags" label="Categorías" to="/categories" @navigate="emit('close')" />
         <SidebarItem icon="boxes" label="Items" to="/items" :active="route.path.startsWith('/items')" @navigate="emit('close')" />
         <SidebarItem icon="map-pin" label="Ubicaciones" to="/locations" @navigate="emit('close')" />
         <SidebarItem icon="tag" label="Etiquetas" to="/labels" @navigate="emit('close')" />
