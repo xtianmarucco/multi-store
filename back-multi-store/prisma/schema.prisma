@@ -9,43 +9,58 @@ datasource db {
 }
 
 model groups {
-  id         Int         @id @default(autoincrement())
-  name       String
-  created_at DateTime    @default(now()) @db.Timestamp(6)
-  users      users[]
-  locations  locations[]
-  labels     labels[]
-  items      items[]
+  id              Int               @id @default(autoincrement())
+  name            String
+  created_at      DateTime          @default(now()) @db.Timestamp(6)
+  users           users[]
+  locations       locations[]
+  labels          labels[]
+  items           items[]
+  categories      categories[]
+  products        products[]
+  product_variants product_variants[]
+  price_lists     price_lists[]
+  stocks          stocks[]
+  stock_movements stock_movements[]
 }
 
 model users {
-  id            Int      @id @default(autoincrement())
-  full_name     String
-  email         String   @unique
-  password_hash String
-  role          String   @default("member") // admin | member
-  group_id      Int
-  created_at    DateTime @default(now()) @db.Timestamp(6)
-  group         groups   @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  id              Int               @id @default(autoincrement())
+  full_name       String
+  email           String            @unique
+  password_hash   String
+  role            String            @default("member") // admin | member
+  group_id        Int
+  created_at      DateTime          @default(now()) @db.Timestamp(6)
+  group           groups            @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  stock_movements stock_movements[]
 
   @@index([group_id])
 }
 
 // Ubicaciones jerárquicas: Casa > Garaje > Estantería 2.
+// type: warehouse | store | other (validado en app); is_sale_point marca punto de venta.
 model locations {
-  id          Int         @id @default(autoincrement())
-  name        String
-  description String?
-  parent_id   Int?
-  group_id    Int
-  created_at  DateTime    @default(now()) @db.Timestamp(6)
-  group       groups      @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  parent      locations?  @relation("location_tree", fields: [parent_id], references: [id], onDelete: SetNull)
-  children    locations[] @relation("location_tree")
-  items       items[]
+  id            Int         @id @default(autoincrement())
+  name          String
+  description   String?
+  parent_id     Int?
+  group_id      Int
+  type          String      @default("other")
+  address       String?
+  is_sale_point Boolean     @default(false)
+  created_at    DateTime    @default(now()) @db.Timestamp(6)
+  group         groups      @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  parent        locations?  @relation("location_tree", fields: [parent_id], references: [id], onDelete: SetNull)
+  children      locations[] @relation("location_tree")
+  items         items[]
+  stocks        stocks[]
+  movements_from stock_movements[] @relation("movement_from")
+  movements_to   stock_movements[] @relation("movement_to")
 
   @@index([group_id])
   @@index([parent_id])
+  @@index([group_id, type])
 }
 
 model labels {
@@ -57,6 +72,7 @@ model labels {
   created_at  DateTime @default(now()) @db.Timestamp(6)
   group       groups   @relation(fields: [group_id], references: [id], onDelete: Cascade)
   items       items[]
+  products    products[]
 
   @@unique([group_id, name])
 }
@@ -84,4 +100,153 @@ model items {
 
   @@index([group_id, is_archived])
   @@index([location_id])
+}
+
+// Categorías de catálogo (jerárquicas opcionales).
+model categories {
+  id         Int          @id @default(autoincrement())
+  name       String
+  color      String?
+  parent_id  Int?
+  group_id   Int
+  created_at DateTime     @default(now()) @db.Timestamp(6)
+  group      groups       @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  parent     categories?  @relation("category_tree", fields: [parent_id], references: [id], onDelete: SetNull)
+  children   categories[] @relation("category_tree")
+  products   products[]
+
+  @@unique([group_id, name])
+  @@index([group_id])
+  @@index([parent_id])
+}
+
+// Producto vendible del catálogo.
+model products {
+  id            Int                @id @default(autoincrement())
+  sku           String
+  barcode       String?
+  name          String
+  description   String?
+  category_id   Int?
+  brand         String?
+  unit          String             @default("unit")
+  cost_price    Decimal?           @db.Decimal(12, 2)
+  sale_price    Decimal?           @db.Decimal(12, 2)
+  tax_rate      Decimal?           @db.Decimal(5, 2)
+  min_stock     Int                @default(0)
+  active        Boolean            @default(true)
+  group_id      Int
+  created_at    DateTime           @default(now()) @db.Timestamp(6)
+  updated_at    DateTime           @default(now()) @updatedAt @db.Timestamp(6)
+  group         groups             @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  category      categories?        @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  labels        labels[]
+  variants      product_variants[]
+  prices        product_prices[]
+  stocks        stocks[]
+  movements     stock_movements[]
+
+  @@unique([group_id, sku])
+  @@index([group_id])
+  @@index([category_id])
+}
+
+// Variante de producto (talle, color, etc.).
+model product_variants {
+  id         Int              @id @default(autoincrement())
+  product_id Int
+  group_id   Int
+  sku        String
+  barcode    String?
+  attributes Json?
+  cost_price Decimal?         @db.Decimal(12, 2)
+  sale_price Decimal?         @db.Decimal(12, 2)
+  min_stock  Int              @default(0)
+  active     Boolean          @default(true)
+  created_at DateTime         @default(now()) @db.Timestamp(6)
+  updated_at DateTime         @default(now()) @updatedAt @db.Timestamp(6)
+  group      groups           @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  product    products         @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  prices     product_prices[]
+  stocks     stocks[]
+  movements  stock_movements[]
+
+  @@unique([group_id, sku])
+  @@index([product_id])
+}
+
+// Lista de precios (minorista, mayorista, etc.).
+model price_lists {
+  id         Int              @id @default(autoincrement())
+  name       String
+  group_id   Int
+  created_at DateTime         @default(now()) @db.Timestamp(6)
+  group      groups           @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  prices     product_prices[]
+
+  @@unique([group_id, name])
+  @@index([group_id])
+}
+
+// Precio de un producto (o variante) dentro de una lista.
+model product_prices {
+  id            Int               @id @default(autoincrement())
+  price_list_id Int
+  product_id    Int
+  variant_id    Int?
+  price         Decimal           @db.Decimal(12, 2)
+  created_at    DateTime          @default(now()) @db.Timestamp(6)
+  price_list    price_lists       @relation(fields: [price_list_id], references: [id], onDelete: Cascade)
+  product       products          @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant       product_variants? @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+
+  @@index([price_list_id, product_id])
+}
+
+// Stock de un producto (o variante) en una ubicación.
+// NOTA: el @@unique incluye variant_id nullable; Postgres trata NULL como
+// distinto, así que la capa de servicio debe impedir duplicados con variante NULL.
+model stocks {
+  id          Int               @id @default(autoincrement())
+  product_id  Int
+  variant_id  Int?
+  location_id Int
+  quantity    Int               @default(0)
+  group_id    Int
+  created_at  DateTime          @default(now()) @db.Timestamp(6)
+  updated_at  DateTime          @default(now()) @updatedAt @db.Timestamp(6)
+  group       groups            @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  product     products          @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant     product_variants? @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+  location    locations         @relation(fields: [location_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, product_id, location_id, variant_id])
+  @@index([group_id, location_id])
+  @@index([product_id])
+}
+
+// Movimiento de stock (entrada, salida, transferencia, ajuste).
+// type: in | out | transfer | adjust (validado en app).
+model stock_movements {
+  id               Int               @id @default(autoincrement())
+  product_id       Int
+  variant_id       Int?
+  from_location_id Int?
+  to_location_id   Int?
+  type             String
+  quantity         Int
+  unit_cost        Decimal?          @db.Decimal(12, 2)
+  note             String?
+  user_id          Int
+  group_id         Int
+  created_at       DateTime          @default(now()) @db.Timestamp(6)
+  group            groups            @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  product          products          @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant          product_variants? @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+  from_location    locations?        @relation("movement_from", fields: [from_location_id], references: [id], onDelete: SetNull)
+  to_location      locations?        @relation("movement_to", fields: [to_location_id], references: [id], onDelete: SetNull)
+  user             users             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id, product_id])
+  @@index([to_location_id])
 }
