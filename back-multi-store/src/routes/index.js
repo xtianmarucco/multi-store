@@ -9,6 +9,7 @@ const labelsRoutes = require('./labels.routes')
 const locationsRoutes = require('./locations.routes')
 const priceListsRoutes = require('./price-lists.routes')
 const productsRoutes = require('./products.routes')
+const { stocksRouter, stockMovementsRouter } = require('./stocks.routes')
 const usersRoutes = require('./users.routes')
 
 const router = Router()
@@ -21,6 +22,8 @@ router.use('/labels', requireAuth, labelsRoutes)
 router.use('/locations', requireAuth, locationsRoutes)
 router.use('/price-lists', requireAuth, priceListsRoutes)
 router.use('/products', requireAuth, productsRoutes)
+router.use('/stock-movements', requireAuth, stockMovementsRouter)
+router.use('/stocks', requireAuth, stocksRouter)
 router.use('/users', requireAuth, usersRoutes)
 
 module.exports = router
