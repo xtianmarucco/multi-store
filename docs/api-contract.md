@@ -45,22 +45,97 @@ GET    /auth/me                → usuario autenticado actual
 
 ## Dashboard
 
-GET    /dashboard              → { total_items, total_locations, total_labels, total_value }
+GET    /dashboard              → { total_items, total_locations, total_labels, total_value,
+                                   total_products, total_categories,
+                                   capital_total, capital_warehouse, capital_store, low_stock_count }
+# capital_* valorizado a COSTO (variante si hay, si no producto):
+# capital_total = Σ(stock × costo); capital_warehouse/store filtran por locations.type.
+# low_stock_count = filas con quantity < min_stock (de variante si hay, si no de producto).
+# total_products cuenta solo active:true; total_value/total_items siguen siendo de items legacy.
 
-## Items
+## Products (Catálogo)
+
+GET    /products               → listado paginado (?search= ?category_id= ?label_id= ?active=true|false|all ?page= ?pageSize=)
+# Respuesta: { products, total, page, pageSize } (pageSize máx. 100; active por defecto true)
+GET    /products/:id           → detalle (incluye category, labels, variants, stocks)
+POST   /products               → crear (body: sku*, name*, barcode?, description?, brand?,
+#                                unit? unit|weight|pack (default unit), cost_price?, sale_price?,
+#                                tax_rate?, min_stock? entero ≥0 (default 0), active? default true,
+#                                category_id?, label_ids?[])
+PUT    /products/:id           → actualizar (mismo body; reemplaza label_ids)
+DELETE /products/:id           → eliminar
+
+## Categories (Categorías)
+
+GET    /categories             → lista plana con parent_id y product_count (el front arma el árbol)
+GET    /categories/:id         → detalle con parent y children
+POST   /categories             → crear (body: name*, color? #rrggbb, parent_id?)
+PUT    /categories/:id         → actualizar (valida ciclos: el nuevo padre no puede ser
+#                                la categoría ni uno de sus descendientes → 400 VALIDATION_ERROR)
+DELETE /categories/:id         → eliminar (hijos y productos quedan sin categoría, SetNull)
+
+## Variants (Variantes anidadas)
+
+GET    /products/:id/variants            → listar variantes del producto
+POST   /products/:id/variants            → crear (body: sku*, barcode?, attributes? objeto,
+#                                          cost_price?, sale_price?, min_stock? default 0, active? default true)
+PUT    /products/:id/variants/:vid       → actualizar
+DELETE /products/:id/variants/:vid       → eliminar
+# La variante debe pertenecer al producto de la URL: mismatch → 404 NOT_FOUND.
+
+## Price Lists (Listas de precios)
+
+GET    /price-lists                      → listar
+GET    /price-lists/:id                  → detalle
+POST   /price-lists                      → crear (body: name*)
+PUT    /price-lists/:id                  → actualizar (body: name*)
+DELETE /price-lists/:id                  → eliminar
+GET    /price-lists/:id/prices           → filas de precio de la lista
+POST   /price-lists/:id/prices           → fijar precio (body: product_id*, variant_id?, price* ≥0)
+PUT    /price-lists/:id/prices/:priceId  → actualizar precio (body: price* ≥0)
+DELETE /price-lists/:id/prices/:priceId  → eliminar fila
+# Precio efectivo (resolvePrice, uso interno de ventas): fila de lista (producto+variante)
+# → sale_price de la variante → sale_price del producto → null si no hay precio.
+
+## Stocks (Stock por sucursal)
+
+GET    /stocks                 → listar paginado (?product_id= ?location_id= ?page= ?pageSize=)
+#                                → { stocks, total, page, pageSize }
+POST   /stocks/adjust          → fijar stock absoluto (body: product_id*, variant_id?,
+#                                location_id*, quantity* entero ≥0, note?)
+#                                → 201 + movimiento type adjust
+POST   /stocks/transfer        → mover entre sucursales (body: product_id*, variant_id?,
+#                                from_location_id*, to_location_id* distintas,
+#                                quantity* entero >0, note?) → 201
+#                                → 400 VALIDATION_ERROR si stock insuficiente en origen
+POST   /stocks/in              → entrada (body: product_id*, variant_id?, location_id*,
+#                                quantity* entero >0, note?) → 201, movimiento type in
+POST   /stocks/out             → salida (body: igual que in; valida suficiente) → 201, type out
+# Regla de granularidad: un producto CON variantes no acepta movimientos a nivel producto
+# (variant_id null → 400); con variante, variant_id debe pertenecer al producto.
+
+## Stock Movements (Movimientos)
+
+GET    /stock-movements        → historial paginado (?product_id= ?location_id= ?page= ?pageSize=)
+#                                → { movements, total, page, pageSize }
+#                                (types: in | out | adjust | transfer)
+
+## Items (legacy, solo-lectura)
 
 GET    /items                  → listar paginado (?search= ?location_id= ?label_id= ?archived=true ?page= ?pageSize=)
 GET    /items/:id              → detalle (incluye location y labels)
-POST   /items                  → crear
-PUT    /items/:id              → actualizar (reemplaza label_ids)
-DELETE /items/:id              → eliminar
+POST   /items                  → 410 GONE (código GONE; mensaje "Los items están deprecated: usar /products")
+PUT    /items/:id              → 410 GONE (mismo código/mensaje; no toca el servicio)
+DELETE /items/:id              → eliminar (conservado para limpiar filas legacy ya migradas)
 
 ## Locations (Ubicaciones)
 
 GET    /locations              → lista plana con parent_id e item_count (el front arma el árbol)
+#                                (?type=warehouse|store|other filtra por tipo)
 GET    /locations/:id          → detalle con parent y children
-POST   /locations              → crear (body: name, description?, parent_id?)
-PUT    /locations/:id          → actualizar (valida ciclos)
+POST   /locations              → crear (body: name, description?, parent_id?, type? warehouse|store|other
+#                                (default other), address?, is_sale_point? default false)
+PUT    /locations/:id          → actualizar (valida ciclos; mismos campos)
 DELETE /locations/:id          → eliminar (hijos e items quedan sin ubicación)
 
 ## Labels (Etiquetas)
@@ -174,6 +249,7 @@ Todos los errores deben seguir esta estructura:
 - FORBIDDEN          → usuario autenticado sin permisos suficientes
 - CONFLICT           → violación de referencia entre registros (FK)
 - DUPLICATE          → valor único duplicado
+- GONE               → recurso deprecated, usar el reemplazo indicado en el mensaje
 - INTERNAL_ERROR     → error interno del servidor
 
 ---
@@ -187,6 +263,7 @@ Todos los errores deben seguir esta estructura:
 - 403 → sin permisos (autenticado pero no admin)
 - 404 → recurso no encontrado
 - 409 → conflicto de referencia (FK violation) o duplicado
+- 410 → recurso deprecated (GONE; ver Items legacy: POST/PUT /items → usar /products)
 - 500 → error interno
 
 ---
