@@ -2,7 +2,7 @@ const repo = require('../repositories/locations.repository')
 const { createError } = require('../utils/handleError')
 const { requiredText, optionalText, optionalId } = require('../utils/parse')
 
-const getAll = (groupId) => repo.findAll(groupId)
+const getAll = (groupId, filter = {}) => repo.findAll(groupId, filter)
 
 const getById = async (groupId, id) => {
   const location = await repo.findById(groupId, id)
@@ -10,12 +10,21 @@ const getById = async (groupId, id) => {
   return location
 }
 
-const buildData = async (groupId, { name, description, parent_id }) => {
+const LOCATION_TYPES = ['warehouse', 'store', 'other']
+
+const parseType = (value) => {
+  if (value === undefined || value === null || value === '') return 'other'
+  if (!LOCATION_TYPES.includes(value))
+    throw createError('type debe ser warehouse, store u other', 'VALIDATION_ERROR', 400)
+  return value
+}
+
+const buildData = async (groupId, { name, description, parent_id, type, address, is_sale_point }) => {
   const parentId = optionalId(parent_id, 'parent_id')
   if (parentId && !(await repo.findById(groupId, parentId)))
     throw createError('La ubicación padre no existe', 'VALIDATION_ERROR', 400)
 
-  return { name: requiredText(name, 'name'), description: optionalText(description), parent_id: parentId }
+  return { name: requiredText(name, 'name'), description: optionalText(description), parent_id: parentId, type: parseType(type), address: optionalText(address), is_sale_point: is_sale_point === true }
 }
 
 const create = async (groupId, payload) => {

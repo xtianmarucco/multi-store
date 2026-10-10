@@ -1,8 +1,10 @@
 const prisma = require('../lib/prisma')
 
-const findAll = async (groupId) => {
+const findAll = async (groupId, filter = {}) => {
+  const where = { group_id: groupId }
+  if (filter?.type) where.type = filter.type
   const rows = await prisma.locations.findMany({
-    where: { group_id: groupId },
+    where,
     orderBy: { name: 'asc' },
     include: { _count: { select: { items: { where: { is_archived: false } } } } }
   })

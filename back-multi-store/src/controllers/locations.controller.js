@@ -4,7 +4,7 @@ const { parseId } = require('../utils/parse')
 
 const getAllLocations = async (req, res) => {
   try {
-    const data = await service.getAll(req.session.groupId)
+    const data = await service.getAll(req.session.groupId, { type: req.query?.type })
     res.json({ success: true, data })
   } catch (err) {
     handleError(res, err)
