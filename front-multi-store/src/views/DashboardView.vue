@@ -25,6 +25,46 @@
           icon-bg="bg-green-50"
           icon-color="text-green-600"
         />
+        <RouterLink to="/products">
+          <DashboardCard title="Productos" :value="summary.total_products ?? '—'" description="Activos del catálogo" icon="package" />
+        </RouterLink>
+        <RouterLink to="/categories">
+          <DashboardCard title="Categorías" :value="summary.total_categories ?? '—'" description="Del catálogo" icon="tags" />
+        </RouterLink>
+        <DashboardCard
+          title="Capital total"
+          :value="formatMoney(summary.capital_total)"
+          description="Stock × costo"
+          icon="wallet"
+          icon-bg="bg-green-50"
+          icon-color="text-green-600"
+        />
+        <DashboardCard
+          title="Capital depósito"
+          :value="formatMoney(summary.capital_warehouse)"
+          description="Stock × costo en depósitos"
+          icon="warehouse"
+          icon-bg="bg-blue-50"
+          icon-color="text-[#1479FF]"
+        />
+        <DashboardCard
+          title="Capital locales"
+          :value="formatMoney(summary.capital_store)"
+          description="Stock × costo en locales"
+          icon="store"
+          icon-bg="bg-blue-50"
+          icon-color="text-[#1479FF]"
+        />
+        <RouterLink to="/stocks">
+          <DashboardCard
+            title="Stock bajo"
+            :value="summary.low_stock_count ?? '—'"
+            description="Filas bajo su mínimo"
+            icon="triangle-alert"
+            icon-bg="bg-red-50"
+            icon-color="text-red-600"
+          />
+        </RouterLink>
       </template>
     </div>
   </DashboardLayout>

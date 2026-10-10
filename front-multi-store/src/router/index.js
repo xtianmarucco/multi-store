@@ -40,6 +40,11 @@ const routes = [
     props: route => ({ id: Number(route.params.id) })
   },
   {
+    path: '/stocks',
+    name: 'StocksView',
+    component: () => import('../views/StocksView.vue')
+  },
+  {
     path: '/categories',
     name: 'CategoriesView',
     component: () => import('../views/CategoriesView.vue')
